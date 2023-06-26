@@ -15,14 +15,12 @@
     "@react-native-firebase/app": "^18.1.0",
     "@react-native-firebase/firestore": "^18.1.0",
     "@react-native-firebase/storage": "^18.1.0",
-    "deprecated-react-native-prop-types": "^4.1.0",
     "react": "18.2.0",
     "react-native": "0.71.11",
-    "react-native-camera": "^4.2.1",
-    "react-native-camera-hooks": "^0.5.3",
     "react-native-device-info": "^10.6.0",
     "react-native-geolocation-service": "^5.3.1",
-    "react-native-permissions": "^3.8.0"
+    "react-native-permissions": "^3.8.0",
+    "react-native-vision-camera": "^2.15.4"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

@@ -9,6 +9,8 @@ const ImageContainer = ({img}) => {
     style={{
       width: 200,
       height: 200,
+      borderWidth:.5,
+      borderColor:"white"
     }}/>
 
   )

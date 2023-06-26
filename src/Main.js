@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {StyleSheet, View, PermissionsAndroid, Image} from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import NetInfo from '@react-native-community/netinfo';
@@ -9,15 +9,13 @@ import LogoContainer from './components/LogoContainer';
 import ImageContainer from './components/ImageContainer';
 import DateContainer from './components/DateContainer';
 import CustomButton from './components/CustomButton';
-import {RNCamera} from 'react-native-camera';
-import {useCamera} from 'react-native-camera-hooks';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { get } from 'react-native/Libraries/TurboModule/TurboModuleRegistry';
+import {Camera, useCameraDevices} from 'react-native-vision-camera';
+import FrequencyComponent from './components/FrequencyComponent';
 
 const Main = () => {
-  const [{cameraRef}, {takePicture}] = useCamera(null);
   const [capturedImage, setCapturedImage] = useState();
   const [chargingStatus, setChargingStatus] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState(0);
@@ -26,7 +24,11 @@ const Main = () => {
   const [captureCount, setCaptureCount] = useState(0);
   const [dateTime, setDateTime] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
-  const [frequency,setFrequency] = useState(15)
+  const [frequency, setFrequency] = useState(15);
+  // setting up device
+  const devices = useCameraDevices();
+  const device = devices.back;
+  const camera = useRef(null);
 
   const requestLocationPermission = async () => {
     try {
@@ -43,7 +45,18 @@ const Main = () => {
       console.log('Error requesting location permission: ', error);
     }
   };
-
+  const requestCameraPermission = async () => {
+    try {
+      const granted = await request(PERMISSIONS.ANDROID.CAMERA);
+      if (granted === 'granted') {
+        console.log('Camera permission granted');
+      } else {
+        console.log('Camera permission denied');
+      }
+    } catch (error) {
+      console.log('Error requesting camera permission:', error);
+    }
+  };
   const getCurrentLocation = () => {
     Geolocation.getCurrentPosition(
       position => {
@@ -58,34 +71,23 @@ const Main = () => {
   };
 
   useEffect(() => {
+    // requests
     requestCameraPermission();
     requestLocationPermission();
-    uploadInfos()
+    // runs when component mounts
+    uploadInfos();
+
+    // keeps running according to frequency
+    const intervalId = setInterval(async () => {
+      uploadInfos();
+    }, frequency * 60 * 1000);
     
-
-      const intervalId = setInterval(async() => {
-
-      uploadInfos()
-      }, frequency * 60 * 1000);
- 
-
     return () => {
       clearInterval(intervalId);
     };
-  }, [connectivityStatus]);
+  }, [connectivityStatus, frequency]);
 
-  const requestCameraPermission = async () => {
-    try {
-      const granted = await request(PERMISSIONS.ANDROID.CAMERA);
-      if (granted === 'granted') {
-        console.log('Camera permission granted');
-      } else {
-        console.log('Camera permission denied');
-      }
-    } catch (error) {
-      console.log('Error requesting camera permission:', error);
-    }
-  };
+
   const getDateTime = () => {
     const currentDate = new Date();
     const formattedDate = `${currentDate.getDate()}-${
@@ -95,6 +97,7 @@ const Main = () => {
     const formattedDateTime = `${formattedDate}   ${formattedTime}`;
     setDateTime(formattedDateTime);
   };
+  // Responsible for all the info refresh as well as image capturing
   const getInfos = async () => {
     const isCharging = await DeviceInfo.isBatteryCharging();
     setChargingStatus(isCharging);
@@ -109,11 +112,7 @@ const Main = () => {
     getDateTime();
     getCurrentLocation();
     setCaptureCount(captureCount + 1);
-    if (cameraRef) {
-      handleCapture();
-    } else {
-      console.log('waiting for camera to setup...');
-    }
+    await handleCapture();
   };
   const uploadImage = async () => {
     try {
@@ -133,20 +132,18 @@ const Main = () => {
   };
   const handleCapture = async () => {
     try {
-      if (cameraRef.current) {
-        takePicture().then(data => {
-          setCapturedImage(data.uri);
-
-          console.log('Captured image:', capturedImage);
-        });
-      } else {
-        console.log('Error capturing image ');
-      }
+      const photo = await camera.current.takePhoto({
+        qualityPrioritization: 'quality',
+        flash: 'off',
+      });
+      setCapturedImage(`file://${photo.path}`);
+      console.log('capturedImage', photo.path);
     } catch (error) {
-      console.log('Error capturing image:', error);
-      setTimeout(handleCapture, 500);
+      handleCapture();
+      console.log('waiting for camera...');
     }
   };
+  // uploads based on connectivity
   const uploadInfos = async () => {
     getInfos();
 
@@ -159,10 +156,9 @@ const Main = () => {
       location,
       dateTime,
     };
-    console.log('latestInfo', latestInfo);
     if (connectivityStatus) {
-     
       let data = await getData();
+      //stores the data that is already in async to firebase
       if (data) {
         try {
           const collection = firestore()
@@ -171,14 +167,13 @@ const Main = () => {
             .then(() => {
               uploadImage();
               console.log('data added successfuly');
-              AsyncStorage.clear()
-              
+              //clears the data in async storage once uploaded to firebase
+              AsyncStorage.clear();
             });
         } catch (error) {
           console.log('Error uploading device info:', error);
         }
-      }else{
-        
+      } else {
         try {
           const collection = firestore()
             .collection('deviceInfos')
@@ -190,13 +185,14 @@ const Main = () => {
         } catch (error) {
           console.log('Error uploading device info:', error);
         }
-
       }
     } else {
+      // add to firebase if there is no internet connection
       await storeData(latestInfo);
       console.log('data stored successfuly', await getData());
     }
   };
+  // Stores data in async storage
   const storeData = async value => {
     try {
       const jsonValue = await JSON.stringify(value);
@@ -205,6 +201,7 @@ const Main = () => {
       console.log(err);
     }
   };
+  // Retrieves data from async storage
   const getData = async () => {
     try {
       const jsonValue = await AsyncStorage.getItem('data');
@@ -213,36 +210,47 @@ const Main = () => {
       console.log('getData', err);
     }
   };
-
-  return (
-    <RNCamera
-      ref={cameraRef}
-      style={styles.preview}
-      type={RNCamera.Constants.Type.back}
-      captureAudio={false}>
-      <View style={styles.container}>
-        <LogoContainer />
-        <DateContainer dateTime={dateTime} />
-        {capturedImage && <ImageContainer img={capturedImage} />}
-        <InfoContainer text="Capture Count" value={captureCount} />
-        <InfoContainer text="Frequency (min)" value={frequency} />
-        <InfoContainer
-          text="Connectivity"
-          value={connectivityStatus ? 'Yes' : 'No'}
-        />
-        <InfoContainer
-          text="Battery Charging"
-          value={chargingStatus ? 'Yes' : 'No'}
-        />
-        <InfoContainer text="Battery Charge" value={batteryLevel} />
-        <InfoContainer
-          text="Location"
-          value={location?.map(e => e).join(',  ')}
-        />
-        <CustomButton getInfos={uploadInfos} />
-      </View>
-    </RNCamera>
-  );
+  if (device == null) {
+    // checks if device is available
+    return <></>;
+  } else {
+    return (
+      <>
+        <Camera
+          style={styles.preview}
+          device={device}
+          isActive={true}
+          ref={camera}
+          photo={true}></Camera>
+        <View style={styles.container}>
+          <LogoContainer />
+          <DateContainer dateTime={dateTime} />
+          {capturedImage && <ImageContainer img={capturedImage} />}
+          <InfoContainer text="Capture Count" value={captureCount} />
+          {/* contains text input */}
+          <FrequencyComponent
+            text="Frequency (min)"
+            frequency={frequency}
+            setFrequency={setFrequency}
+          />
+          <InfoContainer
+            text="Connectivity"
+            value={connectivityStatus ? 'Yes' : 'No'}
+          />
+          <InfoContainer
+            text="Battery Charging"
+            value={chargingStatus ? 'Yes' : 'No'}
+          />
+          <InfoContainer text="Battery Charge" value={batteryLevel} />
+          <InfoContainer
+            text="Location"
+            value={location?.map(e => e).join(',  ')}
+          />
+          <CustomButton uploadInfos={uploadInfos} />
+        </View>
+      </>
+    );
+  }
 };
 
 export default Main;
@@ -253,7 +261,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     alignItems: 'center',
   },
-  preview: {
-    flex: 1,
-  },
+  preview: {},
 });
