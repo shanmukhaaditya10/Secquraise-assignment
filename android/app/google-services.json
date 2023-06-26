@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "76848803891",
+    "project_id": "secquraise-aditya",
+    "storage_bucket": "secquraise-aditya.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:76848803891:android:178ac7a9f11f5335243346",
+        "android_client_info": {
+          "package_name": "com.assignmentsecquraise"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "76848803891-0do4c5m5gb92sldi08s49hi452v28c3m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAd3owuXL2oEvLtOCmQGpQhw6PPjLee29k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "76848803891-0do4c5m5gb92sldi08s49hi452v28c3m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
